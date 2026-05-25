@@ -1,0 +1,29 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: backend_server
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    environment:
+      - MONGO_URL=mongodb://mongo:27017/gig-docker
+
+  frontend:
+    build: ./frontend
+    container_name: frontend_container
+    ports:
+      - "5173:5173"
+    stdin_open: true
+    tty: true
+  mongo:
+    image: mongo:7
+    container_name: docker_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+volumes:
+  mongo_data:
