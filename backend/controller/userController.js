@@ -1,6 +1,7 @@
 const User = require('../models/User')
 const bcrypt = require('bcrypt')
 const jwt= require('jsonwebtoken')
+const redisClient=require('../config/redis')
 
 const MAX_AGE_MS=3*24*60*60*1000
 const isProduction = process.env.NODE_ENV === "production";
@@ -46,26 +47,59 @@ const registerUser= async (req, res)=>{
     }
 }
 
-const loginUser= async(req, res)=>{
-    try{
-        const {email, password}=req.body;
-        const user =await User.findOne({email});
-        if(!user) return res.status(401).json({message: 'Invalid credentials'});
-        const isMatch=await bcrypt.compare(password, user.password);
-        if(!isMatch) return res.status(401).json({message:'Invalid credentials'})
-        const token=user.generateJWT()
-        res.cookie('authToken', token, cookieOptions);
+const loginUser = async (req, res) => {
+    try {
+        const { email, password } = req.body;
+
+        // 1. Always check MongoDB for authentication
+        let user = await User.findOne({ email });
+
+        if (!user) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        // 2. Password check ALWAYS from MongoDB user
+        const isMatch = await bcrypt.compare(password, user.password);
+
+        if (!isMatch) {
+            return res.status(401).json({ message: "Invalid credentials" });
+        }
+
+        // 3. Cache safe data only (NO PASSWORD)
+        await redisClient.set(
+            `user:${email}`,
+            JSON.stringify({
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role
+            }),
+            { EX: 3600 }
+        );
+
+        // 4. JWT
+        const token = jwt.sign(
+            { id: user._id, role: user.role },
+            process.env.JWT_SECRET,
+            { expiresIn: "3d" }
+        );
+
+        res.cookie("authToken", token, cookieOptions);
+
         res.status(200).json({
-            message: 'Login success',
-            user:{id:user._id, name:user.name, role: user.role},
-            
-        })
+            message: "Login success",
+            user: {
+                id: user._id,
+                name: user.name,
+                role: user.role
+            }
+        });
+
+    } catch (error) {
+        console.error("Login error", error);
+        res.status(500).json({ message: "server error" });
     }
-    catch(error){
-        console.error('Login error', error);
-        res.status(500).json({message: 'server error'})
-    }
-}
+};
 
 const logoutUser=(req, res)=>{
     res.clearCookie('authToken', cookieOptions);
