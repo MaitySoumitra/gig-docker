@@ -14,4 +14,5 @@ router.get('/profile', protect, userController.getProfile)
 
 router.get('/search', protect, userController.searchUsers);
 router.get("/all", protect, userController.getAllUsers);
+router.put('/:id', protect, userController.updateUser)
 module.exports= router
